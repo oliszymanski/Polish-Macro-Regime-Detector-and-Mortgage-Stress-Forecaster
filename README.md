@@ -32,24 +32,25 @@ An end-to-end macroeconomic data pipeline, SQL Server feature store, and credit 
         (app/app.py - Streamlit + Plotly)
         - Macro Regime Timeline & Stress Probability Chart
         - PLN Fixed-Annuity Borrower DTI Stress Simulator
+```
 
-Key Features
+## Key features
 
-    Automated Data Ingestion: Extracts 10 Polish macroeconomic and FX indicators (NBP_REF_RATE, CPI_YOY, BOND_10Y, EURPLN, USDPLN, UNEMP_RATE, REAL_WAGE_YOY, HOUSE_PRICE_YOY, RETAIL_SALES_YOY, INDUSTRIAL_PROD_YOY) from public NBP and Finwire REST APIs with domain unit validation.
+- Automated Data Ingestion: Extracts 10 Polish macroeconomic and FX indicators (NBP_REF_RATE, CPI_YOY, BOND_10Y, EURPLN, USDPLN, UNEMP_RATE, REAL_WAGE_YOY, HOUSE_PRICE_YOY, RETAIL_SALES_YOY, INDUSTRIAL_PROD_YOY) from public NBP and Finwire REST APIs with domain unit validation.
 
-    SQL Server Feature Store: Transforms raw monthly series into 3-month rate/FX shock deltas, rolling 36-month Z-scores with flat-regime variance guards (STDEV >= 0.0001), and right-censored 3-month forward stress targets (target_stress_3m).
+- SQL Server Feature Store: Transforms raw monthly series into 3-month rate/FX shock deltas, rolling 36-month Z-scores with flat-regime variance guards (STDEV >= 0.0001), and right-censored 3-month forward stress targets (target_stress_3m).
 
-    Dual Regime Classification: Compares transparent rule-based macroeconomic regimes (Expansion, Neutral, Stress) against an unsupervised 3-component Gaussian Mixture Model (ml_gmm_v1).
+- Dual Regime Classification: Compares transparent rule-based macroeconomic regimes (Expansion, Neutral, Stress) against an unsupervised 3-component Gaussian Mixture Model (ml_gmm_v1).
 
-    Calibrated Stress Forecasting: Benchmarks L2-regularized Logistic Regression against HistGradientBoosting using chronological 5-fold TimeSeriesSplit validation and selects the champion model by lowest out-of-sample Brier score.
+- Calibrated Stress Forecasting: Benchmarks L2-regularized Logistic Regression against HistGradientBoosting using chronological 5-fold TimeSeriesSplit validation and selects the champion model by lowest out-of-sample Brier score.
 
-    PLN Mortgage DTI Simulator: Translates NBP policy rate scenarios and custom basis-point shocks into exact monthly fixed-annuity installments and household Debt-to-Income (DTI) ratios.
+- PLN Mortgage DTI Simulator: Translates NBP policy rate scenarios and custom basis-point shocks into exact monthly fixed-annuity installments and household Debt-to-Income (DTI) ratios.
 
-Model Performance (5-Fold Chronological TimeSeriesSplit)
 
-Evaluated strictly out-of-sample across 120 monthly observations (2016-11-30 to 2026-10-31):
 
 ## Project structure
+
+```text
 Polish-Macro-Regime-Detector-and-Mortgage-Stress-Forecaster/
 ├── app/
 │   └── app.py                          # Streamlit dashboard & PLN DTI simulator
@@ -67,19 +68,46 @@ Polish-Macro-Regime-Detector-and-Mortgage-Stress-Forecaster/
 ├── docker-compose.yml                  # Local SQL Server 2025 container
 ├── requirements.txt
 └── .env.example
+```
 
 
 ## Quick start
 ### 1. Environment Configuration
 
-Copy .env.example to .env and set your SQL Server password:
-
-```
-bash
-   cp .env.example .env
-   # Edit .env and set MSSQL_SA_PASSWORD
+Copy `.env.example` to `.env` and set your SQL Server password:
+```bash
+cp .env.example .env
+# Edit .env and set MSSQL_SA_PASSWORD
 ```
 
 ### 2. Start SQL Server Container
+```bash
+docker compose up -d
 ```
+
+
+### 3. Provision Database Schema (First Run Only)
+```bash
+docker exec -i poland_macro_sqlserver /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C < sql/01_create_tables.sql
+
+docker exec -i poland_macro_sqlserver /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C < sql/02_views_monthly_features.sql
+
+docker exec -i poland_macro_sqlserver /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C < sql/03_rules_based_regimes.sql
+```
+
+
+### 4. Instal Python dependencies & Run Pipeline
+```bash
+python -m venv .venv
+source .venv/bin/activate   # On fish shell: source .venv/bin/activate.fish
+pip install -r requirements.txt
+python -m src.run_pipeline
+```
+
+### 5. Launch the Dashboard
+```bash
+streamlit run app/app.py
 ```
